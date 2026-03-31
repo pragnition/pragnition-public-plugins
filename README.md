@@ -7,7 +7,7 @@ Official Claude Code plugin marketplace by [Pragnition Labs](https://github.com/
 Add this marketplace to Claude Code:
 
 ```
-/plugin marketplace add pragnition/pragnition-plugins
+/plugin marketplace add pragnition/pragnition-public-plugins
 ```
 
 ## Available Plugins
@@ -40,7 +40,7 @@ Add to your project's `.claude/settings.json` to make the marketplace available 
     "pragnition-plugins": {
       "source": {
         "source": "github",
-        "repo": "pragnition/pragnition-plugins"
+        "repo": "pragnition/pragnition-public-plugins"
       }
     }
   }

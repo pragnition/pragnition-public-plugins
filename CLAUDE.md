@@ -1,8 +1,8 @@
 # pragnition-plugins -- Marketplace Maintenance Guide
 
 This is the central Claude Code plugin marketplace for Pragnition Labs.
-It lives at `pragnition/pragnition-plugins` on GitHub and serves as the catalog that
-users add with `/plugin marketplace add pragnition/pragnition-plugins`.
+It lives at `pragnition/pragnition-public-plugins` on GitHub and serves as the catalog that
+users add with `/plugin marketplace add pragnition/pragnition-public-plugins`.
 
 ## Repository Structure
 
