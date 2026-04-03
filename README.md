@@ -16,7 +16,7 @@ See the full [Plugin Catalog](PLUGINS.md) for details and documentation links.
 
 | Plugin | Description | Version |
 |--------|-------------|---------|
-| [rapid](documentation/rapid.md) | Team-based parallel development with isolated worktrees, interface contracts, adversarial review, and intelligent merge | 4.4.0 |
+| [rapid](documentation/rapid.md) | Team-based parallel development with isolated worktrees, interface contracts, adversarial review, and intelligent merge | 6.0.0 |
 
 ### Install a plugin
 

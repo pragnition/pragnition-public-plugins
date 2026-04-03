@@ -1,6 +1,6 @@
 # RAPID
 
-RAPID (Rapid Agentic Parallelizable and Isolatable Development) is a Claude Code plugin that enables coordinated parallel AI-assisted development. It structures work around independent sets -- each running in an isolated git worktree with strict file ownership -- connected through machine-verifiable interface contracts and validated through a multi-stage adversarial review pipeline. 28 specialized agents handle research, planning, execution, review, and merge so developers focus on decisions, not coordination.
+RAPID (Rapid Agentic Parallelizable and Isolatable Development) is a Claude Code plugin that enables coordinated parallel AI-assisted development. It structures work around independent sets -- each running in an isolated git worktree with strict file ownership -- connected through machine-verifiable interface contracts and validated through a multi-stage adversarial review pipeline. 27 specialized agents handle research, planning, execution, review, and merge so developers focus on decisions, not coordination.
 
 ## Install
 
@@ -20,7 +20,7 @@ After either installation method, run `/rapid:install` inside Claude Code to con
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+
 - git 2.30+ (required for worktree support)
 - Claude Code (latest version)
 - `RAPID_TOOLS` env var must be set (both installation methods handle this)
@@ -39,7 +39,10 @@ A typical RAPID workflow follows these stages:
 /rapid:discuss-set <set>        # Capture implementation vision (or --skip)
 /rapid:plan-set <set>           # Research, plan, verify pipeline
 /rapid:execute-set <set>        # Run waves sequentially, one agent per wave
-/rapid:review <set>             # Unit test + bug hunt + UAT pipeline
+/rapid:review <set>             # Scope set for review, produces REVIEW-SCOPE.md
+/rapid:unit-test <set>          # Run unit tests against scoped set
+/rapid:bug-hunt <set>           # Adversarial bug hunt against scoped set
+/rapid:uat <set>                # User acceptance testing against scoped set
 
 # After sets complete:
 /rapid:merge                    # 5-level conflict detection, DAG-ordered merge
@@ -55,11 +58,13 @@ These commands form the linear workflow from project initialization to merge:
 
 ```
 INIT --> START-SET --> DISCUSS-SET --> PLAN-SET --> EXECUTE-SET --> REVIEW --> MERGE
+                                                                     |
+                                                          unit-test, bug-hunt, uat
 ```
 
 #### `/rapid:init`
 
-Bootstraps a new RAPID project. Validates prerequisites, runs an adaptive 4-batch discovery conversation, optionally spawns a `rapid-codebase-synthesizer` for brownfield projects, spawns 6 parallel research agents (stack, features, architecture, pitfalls, oversights, UX), synthesizes findings, and generates a roadmap with sets for approval. Up to 9 agents spawned. No arguments -- interactive discovery gathers all inputs.
+Bootstraps a new RAPID project. Validates prerequisites, runs a 4-batch discovery conversation, spawns 6 parallel research agents (stack, features, architecture, pitfalls, oversights, UX), synthesizes findings, and generates a roadmap with sets for approval. For brownfield projects, a codebase synthesizer analyzes existing code first. No arguments -- interactive discovery gathers all inputs.
 
 Output:
 
@@ -76,13 +81,13 @@ Output:
 
 #### `/rapid:start-set <set-id>`
 
-Claims a set for development by creating an isolated git worktree at `.rapid-worktrees/{set-name}/` on branch `rapid/{set-name}`. Generates a scoped CLAUDE.md with set-specific context and deny lists. Spawns a `rapid-set-planner` agent to produce SET-OVERVIEW.md. Accepts string IDs (e.g., `auth-system`) or numeric indices (e.g., `1`).
+Claims a set for development by creating an isolated git worktree at `.rapid-worktrees/{set-name}/` on branch `rapid/{set-name}`. Generates a scoped CLAUDE.md with set-specific contracts and deny lists. Spawns a `rapid-set-planner` agent to produce SET-OVERVIEW.md. Accepts string IDs (e.g., `auth-system`) or numeric indices (e.g., `1`).
 
 #### `/rapid:discuss-set <set-id> [--skip]`
 
-Captures developer implementation vision for a set before planning. Identifies exactly 4 gray areas where multiple valid approaches exist, asks batched questions per area, and records decisions in CONTEXT.md. Use `--skip` to auto-generate CONTEXT.md without interaction via a research agent. State transition: `pending` --> `discussing`.
+Captures developer implementation vision for a set before planning. Identifies exactly 4 gray areas where multiple valid approaches exist, asks batched questions per area, and records decisions in CONTEXT.md. Use `--skip` to auto-generate CONTEXT.md without interaction via a research agent. State transition: `pending` --> `discussed`.
 
-#### `/rapid:plan-set <set-id>`
+#### `/rapid:plan-set <set-id> [--gaps]`
 
 Plans all waves in a set using a 3-step pipeline:
 
@@ -90,7 +95,7 @@ Plans all waves in a set using a 3-step pipeline:
 2. **Planning** -- `rapid-planner` decomposes the set into 1-4 waves with per-wave PLAN.md files.
 3. **Verification** -- `rapid-plan-verifier` validates coverage, implementability, and consistency.
 
-If verification fails, the planner re-runs once automatically. Contract validation runs after planning completes (advisory during planning, enforced at merge). 3-4 agents spawned. State transition: `discussing` --> `planning`.
+If verification fails, the planner re-runs once automatically. Contract validation runs after planning completes (advisory during planning, enforced at merge). The `--gaps` flag enables gap-closure mode for addressing post-merge gaps. 3-4 agents spawned. State transition: `discussed` --> `planned`.
 
 Output:
 
@@ -101,20 +106,13 @@ Output:
   VERIFICATION-REPORT.md  -- Plan verifier report
 ```
 
-#### `/rapid:execute-set <set-id>`
+#### `/rapid:execute-set <set-id> [--gaps]`
 
-Executes all waves in a set sequentially with one `rapid-executor` agent per wave. Detects completed waves via WAVE-COMPLETE.md markers and git commit verification for crash recovery. After all waves complete, spawns a `rapid-verifier` agent to check objectives. Re-run after a crash to resume from the last checkpoint. State transition: `planning` --> `executing` --> `complete`.
+Executes all waves in a set sequentially with one `rapid-executor` agent per wave. Detects completed waves via WAVE-COMPLETE.md markers and git commit verification for crash recovery. After all waves complete, spawns a `rapid-verifier` agent to check objectives. The `--gaps` flag enables gap-closure mode, executing plans generated from post-merge gap analysis (GAPS.md). Re-run after a crash to resume from the last checkpoint. State transition: `planned` --> `executed` --> `complete`.
 
 #### `/rapid:review <set-id>`
 
-Validates a completed set through a multi-stage adversarial review pipeline. User selects which stages to run:
-
-- **Scoping**: Diffs set branch vs main, categorizes files into concern groups via a scoper agent.
-- **Unit testing**: Generates test plans and executes tests (one unit-tester agent per concern group, parallel).
-- **Adversarial bug hunt** (up to 3 cycles): Bug hunter finds bugs (parallel per concern group), devils advocate challenges findings with counter-evidence, judge rules ACCEPTED/DISMISSED/DEFERRED, bugfix agent fixes accepted bugs. Cycles 2-3 narrow scope to only modified files.
-- **UAT**: Generates acceptance test plans with automated (browser) and human-verified steps.
-
-Output: REVIEW-UNIT.md, REVIEW-BUGS.md, REVIEW-UAT.md, REVIEW-SUMMARY.md.
+Scopes a completed set for review by diffing the set branch against main, identifying changed files and their dependents, and producing `REVIEW-SCOPE.md`. This artifact is consumed by the downstream review skills (`/rapid:unit-test`, `/rapid:bug-hunt`, `/rapid:uat`). Does not run tests or hunt bugs itself.
 
 #### `/rapid:merge [set-id]`
 
@@ -136,25 +134,25 @@ Resolution uses a 4-tier cascade: T1 auto-resolved (>0.9 confidence), T2 auto-re
 
 #### `/rapid:status`
 
-Read-only dashboard showing all sets with statuses, last git activity per branch, and actionable next-step suggestions. Supports numeric shorthand for suggested actions.
+Read-only dashboard showing all sets with statuses, last git activity per branch, and actionable next-step suggestions. Displays sets in DAG wave order. Supports numeric shorthand for suggested actions.
 
 #### `/rapid:install`
 
 One-time plugin setup. Detects the shell (bash, zsh, fish, POSIX), writes `RAPID_TOOLS` to the shell config, creates `.env` fallback, validates the toolchain, and runs agent file generation. No arguments.
 
-#### `/rapid:new-version`
+#### `/rapid:new-version [--spec <path>]`
 
-Completes the current milestone and starts a new planning cycle. Archives the current milestone, gathers new milestone details, handles unfinished sets with carry-forward options, re-runs the full 6-researcher pipeline scoped to new goals, and generates a new roadmap for approval.
+Completes the current milestone and starts a new planning cycle. Archives the current milestone, gathers new milestone details (or reads them from a spec file), handles unfinished sets with carry-forward options, auto-discovers DEFERRED.md files, re-runs the full 6-researcher pipeline scoped to new goals, and generates a new roadmap for approval.
 
 #### `/rapid:add-set <set-name>`
 
 Adds a new set to the current milestone mid-stream through a lightweight 2-question discovery flow. Creates DEFINITION.md and CONTRACT.json, updates STATE.json and ROADMAP.md. No subagent spawns.
 
-### Utilities (6 commands)
+### Utilities (7 commands)
 
 #### `/rapid:quick <description>`
 
-Ad-hoc changes without set structure. Runs a 3-agent pipeline (planner, plan-verifier, executor) in-place on the current branch. Quick tasks are stored in `.planning/quick/` and excluded from STATE.json.
+Ad-hoc changes without set structure. Runs a 3-agent pipeline (planner, plan-verifier, executor) in-place on the current branch. Fully autonomous after the initial task description. Quick tasks are stored in `.planning/quick/` and excluded from STATE.json.
 
 #### `/rapid:assumptions <set-id>`
 
@@ -162,7 +160,7 @@ Read-only. Surfaces Claude's mental model about a set's scope, file boundaries, 
 
 #### `/rapid:pause <set-id>`
 
-Saves execution state to HANDOFF.md for later resumption. Records current wave progress, user notes, and checkpoint data. Warns after 3 pause cycles that the set scope may be too large.
+Saves execution state to HANDOFF.md for later resumption. Records current wave/job progress, user notes, and checkpoint data. Warns after 3 pause cycles that the set scope may be too large.
 
 #### `/rapid:resume <set-id>`
 
@@ -172,6 +170,10 @@ Resumes a paused set from its last checkpoint. Loads HANDOFF.md context, present
 
 Analyzes existing codebase and generates context files. Spawns a `rapid-context-generator` agent for deep analysis, then writes CLAUDE.md (under 80 lines), CODEBASE.md, ARCHITECTURE.md, CONVENTIONS.md, and STYLE_GUIDE.md in `.planning/context/`. Re-runnable at any time. Skip for greenfield projects.
 
+#### `/rapid:bug-fix <description> [--uat <set-id>]`
+
+Investigates and fixes bugs. User describes a bug, the model investigates and applies a fix with atomic commits. Works from any branch -- no set association required. With `--uat <set-id>`, reads `UAT-FAILURES.md` from the set's planning directory and fixes reported failures automatically without manual investigation.
+
 #### `/rapid:cleanup <set-id>`
 
 Removes a completed set's worktree with safety checks. Blocks removal if uncommitted changes exist. Offers optional branch deletion with double-confirmation for unmerged branches.
@@ -180,43 +182,47 @@ Removes a completed set's worktree with safety checks. Blocks removal if uncommi
 
 These commands run individual review pipeline stages independently (outside of `/rapid:review`):
 
-#### `/rapid:bug-fix`
+#### `/rapid:unit-test <set-id>`
 
-Investigate and fix bugs. User describes a bug, the model investigates and applies a fix.
+Run unit test pipeline on a scoped set. Reads REVIEW-SCOPE.md for file targeting. Generates test plans and executes tests using the configured test framework. Results written to REVIEW-UNIT.md. Spawns `rapid-unit-tester` agents per concern group.
 
-#### `/rapid:bug-hunt`
+#### `/rapid:bug-hunt <set-id>`
 
-Run an adversarial bug hunt on a scoped set. Reads REVIEW-SCOPE.md for file targeting.
+Run adversarial bug hunt on a scoped set. Uses a hunter-advocate-judge pattern with up to 3 iterative fix-and-rehunt cycles. Reads REVIEW-SCOPE.md for file targeting. Accepted bugs dispatched to `rapid-bugfix` for targeted fixes. Results written to REVIEW-BUGS.md.
 
-#### `/rapid:unit-test`
+#### `/rapid:uat <set-id>`
 
-Run unit test pipeline on a scoped set. Reads REVIEW-SCOPE.md for file targeting.
-
-#### `/rapid:uat`
-
-Run user acceptance testing on a scoped set. Reads REVIEW-SCOPE.md for file targeting.
+Run user acceptance testing on a scoped set. Reads REVIEW-SCOPE.md for file targeting. Generates acceptance test plans with automated (browser automation) and human-verified steps. Results written to REVIEW-UAT.md.
 
 ### Additional Utilities
 
 #### `/rapid:scaffold`
 
-Generate project-type-aware foundation files for the target codebase.
+Generate project-type-aware foundation files for the target codebase. Detects the project type and scaffolds appropriate directory structure, config files, and boilerplate. Additive-only -- existing files are never overwritten.
 
-#### `/rapid:documentation`
+#### `/rapid:documentation [--scope <full|changelog|api|architecture>] [--diff-only]`
 
-Generate, update, and maintain project documentation from git history and RAPID artifacts.
+Generate, update, and maintain project documentation from git history and RAPID artifacts. Supports scoped generation and diff-only mode for previewing changes without writing files.
 
 #### `/rapid:branding`
 
-Conduct a structured branding interview with codebase-aware visual/UX brand guidelines.
+Conduct a structured branding interview with codebase-aware visual/UX brand guidelines. Generates BRANDING.md that shapes how RAPID agents communicate and style output. Optional -- use before frontend-heavy sets.
 
-#### `/rapid:migrate`
+#### `/rapid:audit-version [version]`
 
-Migrate `.planning/` state from older RAPID versions to the current version.
+Audits a completed milestone by cross-referencing planned requirements against actual delivery. Produces a structured gap report at `.planning/v{version}-AUDIT.md`. Read-only -- never mutates state. Offers remediation through `/rapid:add-set` or deferral for the next version.
+
+#### `/rapid:migrate [--dry-run]`
+
+Migrate `.planning/` state from older RAPID versions to the current version. Handles schema changes, status renames, and structural updates. Supports dry-run mode to preview changes.
+
+#### `/rapid:register-web`
+
+Registers the current project with the RAPID Mission Control web dashboard. Only needed for projects initialized before v4.1.0. New projects auto-register during `/rapid:init` when `RAPID_WEB=true` is set.
 
 #### `/rapid:help`
 
-Static command reference and workflow guide.
+Static command reference and workflow guide. Displays all 28 commands organized by category with usage guidance.
 
 ## Configuration
 
@@ -245,7 +251,7 @@ Created by `/rapid:init`:
 
 ## Key Concepts
 
-**Sets** -- Independent workstreams that run in isolated git worktrees. Each set has strict file ownership and connects to other sets through interface contracts. Sets are the sole stateful entity in STATE.json. Lifecycle: `pending -> discussing -> planning -> executing -> complete -> merged`.
+**Sets** -- Independent workstreams that run in isolated git worktrees. Each set has strict file ownership and connects to other sets through interface contracts. Sets are the sole stateful entity in STATE.json. Lifecycle: `pending -> discussed -> planned -> executed -> complete -> merged`.
 
 **Waves** -- Execution groups within sets. Within a set, waves execute sequentially with one executor agent per wave. Crash recovery detects completed waves via WAVE-COMPLETE.md markers and git commits.
 
@@ -257,13 +263,13 @@ Created by `/rapid:init`:
 
 ## Agents
 
-28 agents organized into 6 categories:
+27 agents organized into 7 categories:
 
 - **Core (4):** planner, executor, merger, reviewer
 - **Research (7):** 6 domain researchers (stack, features, architecture, pitfalls, oversights, UX) + synthesizer
 - **Review (7):** scoper, unit-tester, bug-hunter, devils-advocate, judge, bugfix, uat
 - **Merge (2):** set-merger, conflict-resolver
-- **Utility (5):** roadmapper, set-planner, plan-verifier, verifier, codebase-synthesizer
+- **Utility (6):** roadmapper, set-planner, plan-verifier, verifier, codebase-synthesizer, auditor
 - **Context (1):** context-generator
 
 ## File Structure
@@ -272,12 +278,24 @@ Created by `/rapid:init`:
 RAPID/
   .claude-plugin/plugin.json       Plugin manifest
   skills/                          Skill definitions (one per command)
-  agents/                          Specialized agent definitions
+  agents/                          27 generated agent definitions
   src/
     bin/rapid-tools.cjs            CLI tool library
+    commands/                      CLI command handlers
+    hooks/                         Post-task verification hooks
+    lib/                           Core libraries (state, merge, worktree, etc.)
+    modules/                       Role definitions and core modules
+    schemas/                       Zod validation schemas
+  docs/                            Detailed documentation (11 files)
+  web/                             Mission Control dashboard source
+  branding/                        Branding assets
+  test/                            Test suites
+  config.json                      Project configuration
+  package.json
   setup.sh                         Installation script
   README.md                        User-facing overview
   DOCS.md                          Full technical reference
+  technical_documentation.md       Architectural deep-dive narrative
 ```
 
 ## Tips
@@ -289,10 +307,11 @@ RAPID/
 - If execution is interrupted, re-run `/rapid:execute-set` -- it detects completed waves and resumes from the last checkpoint.
 - If planning crashes, re-run `/rapid:plan-set` -- it is idempotent and will overwrite incomplete plan files.
 - If merge crashes, re-run `/rapid:merge` -- MERGE-STATE.json tracks which sets have been processed for idempotent re-entry.
-- The adversarial bug hunt runs up to 3 cycles, narrowing scope each time.
+- The review pipeline is split: first run `/rapid:review` to scope, then run `/rapid:unit-test`, `/rapid:bug-hunt`, `/rapid:uat` independently against the scope.
+- The adversarial bug hunt runs up to 3 cycles, narrowing scope each time. It is the most expensive review stage -- skip it for low-risk changes.
 - File ownership is strict by design. If two sets need the same file, restructure the decomposition.
 - The merge command respects dependency order automatically via topological sort of the DAG. Clean merges skip conflict detection entirely.
 - Use `/rapid:pause` and `/rapid:resume` for long-running sets that span multiple sessions.
 - Commands accepting `<set-id>` support both string IDs (e.g., `auth-system`) and numeric indices (e.g., `1`).
 - `/rapid:quick` uses only 3 agent spawns for ad-hoc changes, avoiding the full set lifecycle overhead.
-- The adversarial bug hunt is the most expensive review stage. Use stage selection in `/rapid:review` to run only the stages you need.
+- Use `/rapid:audit-version` after merging to verify planned requirements were delivered.
