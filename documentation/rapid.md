@@ -20,7 +20,7 @@ After either installation method, run `/rapid:install` inside Claude Code to con
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+
 - git 2.30+ (required for worktree support)
 - Claude Code (latest version)
 - `RAPID_TOOLS` env var must be set (both installation methods handle this)
@@ -222,7 +222,7 @@ Registers the current project with the RAPID Mission Control web dashboard. Only
 
 #### `/rapid:help`
 
-Static command reference and workflow guide. Displays all 28 commands organized by category with usage guidance.
+Static command reference and workflow guide. Displays all 29 commands organized by category with usage guidance.
 
 ## Configuration
 
