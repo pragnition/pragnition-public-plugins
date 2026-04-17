@@ -16,7 +16,7 @@
         "repo": "pragnition/RAPID"
       },
       "description": "RAPID (Rapid Agentic Parallelizable and Isolatable Development) -- team-based parallel development with isolated worktrees, interface contracts, adversarial review, and intelligent merge pipeline for Claude Code",
-      "version": "6.2.0",
+      "version": "7.0.1",
       "author": {
         "name": "Pragnition Labs"
       },
